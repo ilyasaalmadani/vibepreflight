@@ -84,3 +84,30 @@ test('report cannot overwrite existing file',async t=>{
   assert.equal(p.status,2);
   assert.equal(await fs.readFile(output,'utf8'),'IMPORTANT');
 });
+
+test('demo fixture keeps triggering its documented heuristics', async () => {
+  const r = await scanProject(path.resolve('examples/unsafe-next'));
+  const ids = r.findings.map(f => f.id).sort();
+  assert.deepEqual(ids, ['CLIENT_ENV_BOUNDARY', 'MISSING_ENV_EXAMPLE', 'PUBLIC_ENV_NAMING']);
+  assert.equal(r.nodes.filter(n => n.kind === 'route').length, 3);
+  assert.ok(r.signalScore < 100);
+});
+
+test('SVG card is static, escaped, and only overwrites its own output', async t => {
+  const { renderCard, CARD_MARKER } = await import('../dist/card.js');
+  const root = await make(); t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await put(root, 'src/app/<b>x</b>/page.tsx', `'use client';\nconst k = process.env.NEXT_PUBLIC_SECRET_TOKEN;`);
+  const card = renderCard(await scanProject(root));
+  assert.ok(card.includes(CARD_MARKER));
+  assert.ok(!/<script|<foreignObject|href=/i.test(card));
+  assert.ok(!card.includes('<b>x</b>'));
+
+  const cli = path.resolve('dist/cli.js');
+  const out = path.join(root, 'card.svg');
+  assert.equal(spawnSync(process.execPath, [cli, root, '--svg', out]).status, 0);
+  assert.equal(spawnSync(process.execPath, [cli, root, '--svg', out]).status, 0);
+  const foreign = path.join(root, 'logo.svg');
+  await fs.writeFile(foreign, '<svg>mine</svg>');
+  assert.equal(spawnSync(process.execPath, [cli, root, '--svg', foreign]).status, 2);
+  assert.equal(await fs.readFile(foreign, 'utf8'), '<svg>mine</svg>');
+});
