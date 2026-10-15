@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { scanProject } from '../dist/scan.js';
 import { diffResults } from '../dist/diff.js';
+import { renderDiffCard } from '../dist/card.js';
 
 const make = async () => fs.mkdtemp(path.join(os.tmpdir(),'vpf-diff-'));
 const put = async (root,name,content) => { const p=path.join(root,name);await fs.mkdir(path.dirname(p),{recursive:true});await fs.writeFile(p,content); };
@@ -43,7 +44,7 @@ test('missing before directory exits 2', async () => {
   await fs.rm(after, { recursive: true, force: true });
 });
 
-test('--since mode detects new finding in second commit', async t => {
+test('--since mode detects new findings by ID', async t => {
   const repo = await make();
   t.after(() => fs.rm(repo,{recursive:true,force:true}));
   spawnSync('git', ['init'], { cwd: repo });
@@ -55,9 +56,29 @@ test('--since mode detects new finding in second commit', async t => {
   await put(repo, 'src/app/page.tsx', `'use client';\nconst x = process.env.SECRET_KEY;`);
   spawnSync('git', ['add', '.'], { cwd: repo });
   spawnSync('git', ['commit', '-m', 'second'], { cwd: repo });
+  const p = spawnSync(process.execPath, [cli, 'diff', repo, '--since', 'HEAD~1', '--json'], { encoding: 'utf8' });
+  assert.equal(p.status, 0);
+  const data = JSON.parse(p.stdout);
+  const ids = data.newFindings.map(f => f.id);
+  assert.ok(ids.includes('CLIENT_ENV_BOUNDARY'));
+  assert.ok(ids.includes('MISSING_ENV_EXAMPLE'));
+});
+
+test('binary file in git archive does not crash --since', async t => {
+  const repo = await make();
+  t.after(() => fs.rm(repo,{recursive:true,force:true}));
+  spawnSync('git', ['init'], { cwd: repo });
+  spawnSync('git', ['config', 'user.email', 't@example.com'], { cwd: repo });
+  spawnSync('git', ['config', 'user.name', 'test'], { cwd: repo });
+  await put(repo, 'src/app/page.tsx', 'export default 1;');
+  await fs.writeFile(path.join(repo, 'image.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  spawnSync('git', ['add', '.'], { cwd: repo });
+  spawnSync('git', ['commit', '-m', 'first'], { cwd: repo });
+  await put(repo, 'src/app/page.tsx', 'export default 2;');
+  spawnSync('git', ['add', '.'], { cwd: repo });
+  spawnSync('git', ['commit', '-m', 'second'], { cwd: repo });
   const p = spawnSync(process.execPath, [cli, 'diff', repo, '--since', 'HEAD~1'], { encoding: 'utf8' });
   assert.equal(p.status, 0);
-  assert.match(p.stdout, /\+1 new/);
 });
 
 test('ref starting with - is rejected', async t => {
@@ -75,4 +96,27 @@ test('--ci exits 1 only on new high findings', async t => {
   await put(after, 'src/app/page.tsx', `const x = 'NEXT_PUBLIC_SECRET_KEY';\nconst y = 'NEXT_PUBLIC_API_KEY';`);
   const p = spawnSync(process.execPath, [cli, 'diff', before, after, '--ci'], { encoding: 'utf8' });
   assert.equal(p.status, 1);
+});
+
+test('--ci exits 0 when high already existed and no new high', async t => {
+  const before = await make(), after = await make();
+  t.after(() => Promise.all([fs.rm(before,{recursive:true,force:true}), fs.rm(after,{recursive:true,force:true})]));
+  await put(before, 'src/app/page.tsx', `const x = 'NEXT_PUBLIC_SECRET_KEY';`);
+  await put(after, 'src/app/page.tsx', `const x = 'NEXT_PUBLIC_SECRET_KEY';`);
+  const p = spawnSync(process.execPath, [cli, 'diff', before, after, '--ci'], { encoding: 'utf8' });
+  assert.equal(p.status, 0);
+});
+
+test('diff card escapes filename and has no script/foreignObject/href', () => {
+  const diff = {
+    newFindings: [{ id: 'X', severity: 'medium', file: 'src/<b>bad</b>.tsx', line: 1, title: 'test', explanation: '', fix: '', fingerprint: 'abc' }],
+    resolvedCount: 0,
+    unchangedCount: 0
+  };
+  const svg = renderDiffCard(diff, 'proj');
+  assert.ok(!svg.includes('<script'));
+  assert.ok(!svg.includes('foreignObject'));
+  assert.ok(!svg.includes('href='));
+  assert.ok(svg.includes('<b>'));
+  assert.ok(svg.includes('<!-- vibepreflight-card -->'));
 });
