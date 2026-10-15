@@ -30,6 +30,12 @@ node dist/cli.js --help
 
 `--ci` exits with status **1** for high-priority heuristic signals or truncated scans; **2** for tool errors. The indicator score is a heuristic hygiene signal, **not** a security score.
 
+## Example report
+
+![VibePreflight report for the unsafe-next example: 3 findings, routes and env references mapped](media/report.png)
+
+Generated from `examples/unsafe-next` with `node dist/cli.js examples/unsafe-next --html preflight.html`. The values in the example are placeholders; only variable names are read.
+
 ## What you get
 
 - **Interactive graph:** maps Next.js App/Pages routes, environment references, detected frameworks, and deployment entrypoints.
