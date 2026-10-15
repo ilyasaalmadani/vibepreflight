@@ -30,6 +30,28 @@ node dist/cli.js --help
 
 `--ci` exits with status **1** for high-priority heuristic signals or truncated scans; **2** for tool errors. The indicator score is a heuristic hygiene signal, **not** a security score.
 
+## Diff an AI coding session
+
+Compare two snapshots to see what new findings an AI coding session introduced.
+
+```bash
+# Compare current directory against a git ref
+npx vibepreflight diff . --since main
+
+# Compare two folders
+npx vibepreflight diff ./before ./after
+
+# JSON output or SVG card
+npx vibepreflight diff . --since HEAD~1 --json
+npx vibepreflight diff . --since main --svg media/diff-card.svg
+```
+
+The diff reports **new** findings (with file:line and fix suggestion), **resolved** count, and **unchanged** count. Findings are matched by a stable fingerprint (id + file + evidence), so a line number shift alone does not count as new.
+
+`--ci` exits 1 only if there are **new** high-severity findings.
+
+This is still a heuristic inventory, **not** a security audit.
+
 ## What you get
 
 - **Interactive graph:** maps Next.js App/Pages routes, environment references, detected frameworks, and deployment entrypoints.
