@@ -1,0 +1,20 @@
+{
+  "name": "vibepreflight",
+  "version": "0.1.0",
+  "description": "Visualize what your AI-built web app is about to ship — locally, before deploy.",
+  "type": "module",
+  "private": false,
+  "bin": {"vibepreflight": "./dist/cli.js"},
+  "files": ["dist", "LICENSE", "README.md"],
+  "engines": {"node": ">=20"},
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm run build && npm test",
+    "demo": "node dist/cli.js examples/unsafe-next --html /tmp/vibepreflight-demo.html",
+    "pack:check": "npm pack --dry-run"
+  },
+  "devDependencies": {"@types/node": "^22.15.0", "typescript": "^5.8.3"},
+  "license": "MIT",
+  "keywords": ["preflight", "ai-coding", "deployment", "devtools", "security-awareness", "visualization"]
+}
