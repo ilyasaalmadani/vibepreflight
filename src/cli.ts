@@ -7,7 +7,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { scanProject } from './scan.js';
 import { renderReport } from './report.js';
-import { renderCard, CARD_MARKER } from './card.js';
+import { renderCard, renderDiffCard, CARD_MARKER } from './card.js';
 import { diffResults } from './diff.js';
 import type { DiffResult } from './types.js';
 
@@ -41,7 +41,7 @@ async function extractRef(repo: string, ref: string): Promise<string> {
   if (ref.startsWith('-')) throw new Error('Ref must not start with "-".');
   const tmp = await mkdtemp(path.join(tmpdir(), 'vibepreflight-'));
   try {
-    const { stdout } = await execFileAsync('git', ['archive', ref], { cwd: repo, maxBuffer: 50 * 1024 * 1024 });
+    const { stdout } = await execFileAsync('git', ['archive', ref], { cwd: repo, encoding: 'buffer', maxBuffer: 50 * 1024 * 1024 });
     const archivePath = path.join(tmp, 'archive.tar');
     await fs.writeFile(archivePath, stdout);
     await execFileAsync('tar', ['-xf', archivePath, '-C', tmp]);
@@ -101,9 +101,7 @@ async function runDiff(argv: string[]) {
   const diff: DiffResult = diffResults(beforeResult, afterResult);
 
   if (svg) {
-    // Reuse card renderer for now; a dedicated diff card can be added later.
-    const fake = { ...afterResult, findings: diff.newFindings, signalScore: afterResult.signalScore };
-    await writeCard(path.resolve(svg), renderCard(fake as any));
+    await writeCard(path.resolve(svg), renderDiffCard(diff, afterResult.project));
     if (!json) console.log(`SVG card: ${path.resolve(svg)}`);
   }
 
