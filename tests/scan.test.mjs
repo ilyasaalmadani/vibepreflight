@@ -84,3 +84,11 @@ test('report cannot overwrite existing file',async t=>{
   assert.equal(p.status,2);
   assert.equal(await fs.readFile(output,'utf8'),'IMPORTANT');
 });
+
+test('demo fixture keeps triggering its documented heuristics', async () => {
+  const r = await scanProject(path.resolve('examples/unsafe-next'));
+  const ids = r.findings.map(f => f.id).sort();
+  assert.deepEqual(ids, ['CLIENT_ENV_BOUNDARY', 'MISSING_ENV_EXAMPLE', 'PUBLIC_ENV_NAMING']);
+  assert.equal(r.nodes.filter(n => n.kind === 'route').length, 3);
+  assert.ok(r.signalScore < 100);
+});
