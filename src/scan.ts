@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import type { Result, Finding, GraphNode, GraphEdge, Severity } from './types.js';
 
 const SKIP = new Set(['.git', 'node_modules', '.next', 'dist', 'build', 'coverage', '.turbo', '.cache', '.vercel', '.wrangler', 'vendor', '.output']);
@@ -14,6 +15,10 @@ const ENV_REF = /\b(?:process\.env\.|import\.meta\.env\.)([A-Z][A-Z0-9_]*)\b/g;
 const normalize = (p: string) => p.split(path.sep).join('/');
 const lineAt = (s: string, index: number) => s.slice(0, index).split('\n').length;
 const nodeId = (kind: string, name: string) => `${kind}:${name}`;
+
+function fingerprint(id: string, file: string, evidence: string): string {
+  return createHash('sha256').update(`${id}|${file}|${evidence}`).digest('hex').slice(0, 16);
+}
 
 export async function scanProject(root: string): Promise<Result> {
   const resolved = path.resolve(root);
@@ -51,9 +56,10 @@ export async function scanProject(root: string): Promise<Result> {
   let examined = 0;
   let hasEnvExample = false;
   const addNode = (node: GraphNode) => { if (!knownNodes.has(node.id)) { knownNodes.add(node.id); nodes.push(node); } };
-  const addFinding = (id: string, severity: Severity, file: string, line: number, title: string, explanation: string, fix: string) => {
-    if (findings.some(f => f.id === id && f.file === file && f.line === line)) return;
-    findings.push({ id, severity, file, line, title, explanation, fix });
+  const addFinding = (id: string, severity: Severity, file: string, line: number, title: string, explanation: string, fix: string, evidence: string) => {
+    const fp = fingerprint(id, file, evidence);
+    if (findings.some(f => f.fingerprint === fp)) return;
+    findings.push({ id, severity, file, line, title, explanation, fix, fingerprint: fp });
   };
 
   for (const file of files) {
@@ -76,7 +82,7 @@ export async function scanProject(root: string): Promise<Result> {
         if (pkg.dependencies?.['@cloudflare/workers-types'] || pkg.devDependencies?.['wrangler']) frameworks.add('Cloudflare Workers');
         if (pkg.scripts?.build) addNode({id: nodeId('deployment','build'),kind:'deployment',label:'npm run build',detail:'Build script declared in package.json',file:rel});
         if (pkg.scripts?.deploy) addNode({id: nodeId('deployment','deploy'),kind:'deployment',label:'npm run deploy',detail:'Deploy script declared in package.json',file:rel});
-      } catch { addFinding('INVALID_PACKAGE_JSON', 'medium', rel, 1, 'package.json cannot be parsed', 'Release tooling may fail to read this manifest.', 'Fix the JSON syntax and rerun the scan.'); }
+      } catch { addFinding('INVALID_PACKAGE_JSON', 'medium', rel, 1, 'package.json cannot be parsed', 'Release tooling may fail to read this manifest.', 'Fix the JSON syntax and rerun the scan.', 'parse'); }
     }
     if (/^(wrangler\.(?:toml|json)|wrangler\.jsonc)$/.test(rel)) {
       frameworks.add('Cloudflare Workers');
@@ -115,23 +121,23 @@ export async function scanProject(root: string): Promise<Result> {
       addNode({id:eid,kind:'env',label:variable,detail:'Environment variable referenced in source',file:rel});
       if (knownNodes.has(nodeId('route',rel))) edges.push({from:nodeId('route',rel),to:eid,label:'reads'});
       if (clientComponent && m[0].startsWith('process.env.') && !variable.startsWith('NEXT_PUBLIC_')) {
-        addFinding('CLIENT_ENV_BOUNDARY','medium',rel,line,'Server-only env referenced by a client component',`The client component references ${variable}. It may be unavailable in the browser; this is not proof of an exposure.`, 'Move the access to a server component/API handler, and only pass non-sensitive values to the client.');
+        addFinding('CLIENT_ENV_BOUNDARY','medium',rel,line,'Server-only env referenced by a client component',`The client component references ${variable}. It may be unavailable in the browser; this is not proof of an exposure.`, 'Move the access to a server component/API handler, and only pass non-sensitive values to the client.', variable);
       }
     }
     for (const m of contents.matchAll(CLIENT_PREFIX)) {
       const variable = m[0];
       if (!SENSITIVE.test(variable)) continue;
       const line = lineAt(contents, m.index);
-      addFinding('PUBLIC_ENV_NAMING','high',rel,line,'Sensitive-looking name has a public env prefix', `${variable} appears to be designated client-visible. This is a name-based warning, not confirmation that a credential leaked.`, 'Verify whether the value is intended to be public. Keep private credentials server-side; use a clearly public key only when the provider documents it as safe.');
+      addFinding('PUBLIC_ENV_NAMING','high',rel,line,'Sensitive-looking name has a public env prefix', `${variable} appears to be designated client-visible. This is a name-based warning, not confirmation that a credential leaked.`, 'Verify whether the value is intended to be public. Keep private credentials server-side; use a clearly public key only when the provider documents it as safe.', variable);
     }
   }
   if (envUses.size && !hasEnvExample) {
     const first = [...envUses.values()][0]!;
-    addFinding('MISSING_ENV_EXAMPLE','medium', first.file, first.line, 'No .env.example found', 'The repo references environment variables but lacks a discoverable example template.', 'Add a .env.example containing variable names and empty or obviously fake values only. Never include real credentials.');
+    addFinding('MISSING_ENV_EXAMPLE','medium', first.file, first.line, 'No .env.example found', 'The repo references environment variables but lacks a discoverable example template.', 'Add a .env.example containing variable names and empty or obviously fake values only. Never include real credentials.', 'missing');
   } else if (hasEnvExample) {
     for (const [name, ref] of envUses) {
       if (name.startsWith('NEXT_PUBLIC_') && !envExamples.has(name)) {
-        addFinding('UNDOCUMENTED_PUBLIC_ENV','info',ref.file,ref.line,'Public env var missing from .env.example',`${name} is referenced but is not documented in the example template.`, 'Add the variable name to .env.example with a safe placeholder.');
+        addFinding('UNDOCUMENTED_PUBLIC_ENV','info',ref.file,ref.line,'Public env var missing from .env.example',`${name} is referenced but is not documented in the example template.`, 'Add the variable name to .env.example with a safe placeholder.', name);
       }
     }
   }
