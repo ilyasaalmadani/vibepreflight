@@ -1,4 +1,4 @@
-import type { Result, Severity } from './types.js';
+import type { Result, Severity, DiffResult } from './types.js';
 
 // Marker that lets the CLI safely regenerate a card it wrote earlier.
 export const CARD_MARKER = '<!-- vibepreflight-card -->';
@@ -54,6 +54,47 @@ ${CARD_MARKER}
 <text x="${WIDTH - 28}" y="78" text-anchor="end" font-size="44" font-weight="800" fill="${scoreColor(result.signalScore)}">${result.signalScore}<tspan font-size="18" fill="#92a3bd">/100</tspan></text>
 <text x="${WIDTH - 28}" y="102" text-anchor="end" font-size="12" fill="#92a3bd">hygiene signal</text>
 <line x1="28" y1="126" x2="${WIDTH - 28}" y2="126" stroke="#26394e"/>
+${findingRows}${more}
+<text x="28" y="${height - 22}" font-size="11" fill="#7086a1">Static local inventory · no uploads · not a security audit</text>
+</g>
+</svg>
+`;
+}
+
+/** Diff-specific card: +N new · M resolved · K unchanged. No total score. */
+export function renderDiffCard(diff: DiffResult, project: string): string {
+  const shown = diff.newFindings.slice(0, MAX_ROWS);
+  const extra = diff.newFindings.length - shown.length;
+  const listTop = 130;
+  const rows = shown.length || 1;
+  const height = listTop + rows * ROW + (extra > 0 ? 26 : 0) + 52;
+  const title = `+${diff.newFindings.length} new · ${diff.resolvedCount} resolved · ${diff.unchangedCount} unchanged`;
+
+  const findingRows = shown.length
+    ? shown.map((f, i) => {
+        const y = listTop + i * ROW;
+        const t = tone[f.severity];
+        return `<g transform="translate(28 ${y})">`
+          + `<rect width="46" height="20" rx="5" fill="${t.bg}"/>`
+          + `<text x="23" y="14" text-anchor="middle" font-size="10" font-weight="800" fill="${t.fg}">${t.label}</text>`
+          + `<text x="58" y="14" font-size="14" font-weight="600" fill="#edf2ff">${xml(clip(f.title, 70))}</text>`
+          + `<text x="58" y="33" font-size="12" fill="#92a3bd">${xml(clip(`${f.file}:${f.line}`, 80))}</text>`
+          + `</g>`;
+      }).join('')
+    : `<text x="28" y="${listTop + 14}" font-size="14" fill="#92a3bd">No new findings.</text>`;
+  const more = extra > 0
+    ? `<text x="28" y="${listTop + rows * ROW + 12}" font-size="12" fill="#92a3bd">+${extra} more</text>`
+    : '';
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}" role="img" aria-label="VibePreflight diff: ${xml(title)}">
+${CARD_MARKER}
+<title>VibePreflight Diff · ${xml(project)} · ${xml(title)}</title>
+<g font-family="Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Arial,sans-serif">
+<rect x="0.5" y="0.5" width="${WIDTH - 1}" height="${height - 1}" rx="16" fill="#0b1220" stroke="#26394e"/>
+<text x="28" y="40" font-size="12" font-weight="800" letter-spacing="2" fill="#8ddcf2">◇ VIBEPREFLIGHT DIFF</text>
+<text x="28" y="74" font-size="22" font-weight="800" fill="#edf2ff">${xml(clip(project, 34))}</text>
+<text x="28" y="102" font-size="14" fill="#a3b3ce">${xml(title)}</text>
+<line x1="28" y1="118" x2="${WIDTH - 28}" y2="118" stroke="#26394e"/>
 ${findingRows}${more}
 <text x="28" y="${height - 22}" font-size="11" fill="#7086a1">Static local inventory · no uploads · not a security audit</text>
 </g>

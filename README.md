@@ -31,6 +31,28 @@ node dist/cli.js --help
 
 `--ci` exits with status **1** for high-priority heuristic signals or truncated scans; **2** for tool errors. The indicator score is a heuristic hygiene signal, **not** a security score.
 
+## Diff an AI coding session
+
+See which findings an AI coding session introduced, resolved or left unchanged.
+
+```bash
+# Compare the working tree against a git ref
+node dist/cli.js diff . --since main
+
+# Compare two folders
+node dist/cli.js diff ./before ./after
+
+# JSON output or an SVG card for the PR description
+node dist/cli.js diff . --since HEAD~1 --json
+node dist/cli.js diff . --since main --svg diff-card.svg
+```
+
+<img src="media/diff-card.svg" width="640" alt="VibePreflight diff card: new, resolved and unchanged findings">
+
+Findings are matched by a stable fingerprint (rule + file + evidence such as the variable name), not by count or line number. Swapping one flagged variable for another shows up as one new and one resolved; a line shift alone is not new. `--since` reads the ref with `git archive` into a temporary folder and never runs project code.
+
+`--ci` exits 1 only when there are **new** high-severity findings. This is still a heuristic inventory, **not** a security audit.
+
 ## README card
 
 Put your release surface on your README. One command writes a static SVG card (no scripts, no external requests):
