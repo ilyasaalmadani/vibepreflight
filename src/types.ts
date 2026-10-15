@@ -8,6 +8,8 @@ export interface Finding {
   title: string;
   explanation: string;
   fix: string;
+  /** Stable identity for diffing. Does not include line number. */
+  fingerprint?: string;
 }
 export interface GraphNode {
   id: string;
@@ -29,4 +31,9 @@ export interface Result {
   /** Heuristic hygiene indicator, NOT a security certification. */
   signalScore: number;
   limitations: string[];
+}
+export interface DiffResult {
+  newFindings: Finding[];
+  resolvedCount: number;
+  unchangedCount: number;
 }
