@@ -25,10 +25,27 @@ You can also use:
 ```bash
 node dist/cli.js /path/to/project --json
 node dist/cli.js /path/to/project --ci
+node dist/cli.js /path/to/project --svg card.svg
 node dist/cli.js --help
 ```
 
 `--ci` exits with status **1** for high-priority heuristic signals or truncated scans; **2** for tool errors. The indicator score is a heuristic hygiene signal, **not** a security score.
+
+## README card
+
+Put your release surface on your README. One command writes a static SVG card (no scripts, no external requests):
+
+```bash
+node dist/cli.js . --svg vibepreflight.svg
+```
+
+```markdown
+![VibePreflight](vibepreflight.svg)
+```
+
+<img src="media/card.svg" width="640" alt="VibePreflight card for the unsafe-next example: hygiene signal 55/100, 3 findings">
+
+Rerunning regenerates the card in place. VibePreflight only overwrites a file that is itself a VibePreflight card.
 
 ## Example report
 
